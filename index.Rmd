@@ -1,0 +1,31 @@
+---
+title: "Microbiome Data Visualization"
+author: "Teresia Mrema Buza"
+site: bookdown::bookdown_site
+documentclass: book
+description: "Free core guide for microbiome data visualization, aligned with iMAP."
+---
+
+# Overview {-}
+
+This guide is the **free core** for microbiome data visualization. It is designed to help you generate common plots and read them correctly.
+
+It builds on outputs from **iMAP PART 08 (Exploratory Analysis)** and connects visualization choices to the questions they answer.
+
+## Who this is for {-}
+
+- Researchers working with 16S microbiome data outputs from QIIME2, mothur, or similar pipelines  
+- Learners who can run code but want a clearer interpretation path for plots  
+- Anyone preparing figures for manuscripts or reports  
+
+## What you will learn {-}
+
+- How to choose plots that match a biological or analytical question  
+- How to read composition and ordination plots without over-claiming  
+- How prevalence and filtering change what you see  
+- How to structure a reproducible visualization workflow in R  
+
+## Related projects {-}
+
+- iMAP project overview: https://github.com/tmbuza/imap-project-overview
+- iMAP PART 08 (Exploratory analysis): https://github.com/tmbuza/imap-data-exploration
