@@ -1,0 +1,248 @@
+---
+title: "Diversity Analysis"
+engine: knitr
+---
+
+# Diversity Analysis
+
+Alpha diversity summaries are common in microbiome studies.
+
+They are useful — but only when interpreted carefully.
+
+This chapter focuses on:
+
+- what alpha diversity measures
+- how sequencing depth affects diversity
+- how to interpret group differences responsibly
+
+:::cdi-message
+Alpha diversity is not a single concept.
+
+Different metrics emphasize richness, evenness, and dominance differently.
+Interpretation depends on the metric.
+:::
+
+---
+
+## Load Data
+
+```{r load-data}
+library(phyloseq)
+library(vegan)
+
+ps <- readRDS("data/moving-pictures-ps.rds")
+```
+
+---
+
+## Check Sequencing Depth (R → Python)
+
+Alpha diversity is sensitive to sequencing depth.
+
+```{r export-library-size}
+lib_size <- phyloseq::sample_sums(ps)
+
+df_lib <- data.frame(
+  sample_id = names(lib_size),
+  library_size = as.numeric(lib_size),
+  stringsAsFactors = FALSE
+)
+
+dir.create("outputs/tables", recursive = TRUE, showWarnings = FALSE)
+readr::write_csv(df_lib, "outputs/tables/library-size.csv")
+
+summary(df_lib$library_size)
+```
+
+```{python plot-library-size}
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+df = pd.read_csv("outputs/tables/library-size.csv")
+
+sns.set_theme(style="whitegrid")
+
+plt.figure(figsize=(9,5))
+sns.histplot(df["library_size"], bins=30, kde=True)
+
+plt.title("Sequencing depth distribution")
+plt.xlabel("Library size (total reads per sample)")
+plt.ylabel("Number of samples")
+
+sns.despine()
+plt.tight_layout()
+plt.show()
+```
+
+:::cdi-message
+If sequencing depth varies widely, observed richness may vary even if communities are identical.
+
+Depth inspection is part of interpretation, not an optional diagnostic.
+:::
+
+---
+
+## Compute Alpha Diversity (R)
+
+```{r compute-alpha}
+otu <- methods::as(phyloseq::otu_table(ps), "matrix")
+if (!phyloseq::taxa_are_rows(ps)) otu <- t(otu)
+
+observed <- colSums(otu > 0)
+shannon  <- vegan::diversity(t(otu), index = "shannon")
+simpson  <- vegan::diversity(t(otu), index = "simpson")
+pielou   <- shannon / log(pmax(observed, 1))
+
+alpha_df <- data.frame(
+  sample_id = colnames(otu),
+  observed  = observed,
+  shannon   = shannon,
+  simpson   = simpson,
+  pielou    = pielou,
+  stringsAsFactors = FALSE
+)
+
+meta <- data.frame(phyloseq::sample_data(ps))
+meta$sample_id <- rownames(meta)
+
+alpha_df <- merge(alpha_df, meta, by = "sample_id", all.x = TRUE)
+
+cols <- names(alpha_df)
+body_col <- intersect(c("body-site", "body.site", "body_site"), cols)
+
+if (length(body_col) == 0) {
+  stop(
+    "Body site column not found. Available columns: ",
+    paste(cols, collapse = ", ")
+  )
+}
+
+alpha_df$body_site <- alpha_df[[body_col[1]]]
+alpha_df$library_size <- phyloseq::sample_sums(ps)[alpha_df$sample_id]
+
+readr::write_csv(alpha_df, "outputs/tables/alpha-diversity.csv")
+
+head(alpha_df)
+```
+
+---
+
+## Visualize Alpha Diversity (Python, Seaborn)
+
+```{python alpha-boxplots}
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+df = pd.read_csv("outputs/tables/alpha-diversity.csv")
+df = df.dropna(subset=["body_site"])
+
+sns.set_theme(style="whitegrid")
+
+metrics = [
+    ("observed", "Observed richness"),
+    ("shannon", "Shannon diversity"),
+    ("simpson", "Simpson diversity"),
+    ("pielou", "Pielou evenness"),
+]
+
+order = (
+    df.groupby("body_site")["observed"]
+    .median()
+    .sort_values(ascending=False)
+    .index
+)
+
+for col, title in metrics:
+    fig, ax = plt.subplots(figsize=(9,5))
+
+    sns.boxplot(
+        data=df,
+        x="body_site",
+        y=col,
+        order=order,
+        showfliers=False,
+        width=0.6,
+        ax=ax
+    )
+
+    sns.stripplot(
+        data=df,
+        x="body_site",
+        y=col,
+        order=order,
+        size=3,
+        alpha=0.4,
+        jitter=0.25,
+        ax=ax
+    )
+
+    ax.set_title(f"{title} by body site")
+    ax.set_xlabel("Body site")
+    ax.set_ylabel(title)
+
+    sns.despine()
+    plt.setp(ax.get_xticklabels(), rotation=20, ha="right")
+
+    fig.tight_layout()
+    plt.show()
+```
+
+---
+
+## Depth Sensitivity Check (Python)
+
+```{python richness-vs-depth}
+import numpy as np
+
+df = pd.read_csv("outputs/tables/alpha-diversity.csv")
+
+plt.figure(figsize=(8.5,5))
+sns.scatterplot(data=df, x="library_size", y="observed", alpha=0.7)
+
+coef = np.polyfit(df["library_size"], df["observed"], 1)
+x = np.linspace(df["library_size"].min(), df["library_size"].max(), 200)
+plt.plot(x, coef[0]*x + coef[1])
+
+plt.title("Observed richness vs sequencing depth")
+plt.xlabel("Library size")
+plt.ylabel("Observed richness")
+
+sns.despine()
+plt.tight_layout()
+plt.show()
+```
+
+---
+
+## Interpretation
+
+:::cdi-message
+Observed richness is highly depth-sensitive.
+
+Shannon and Simpson reduce some sensitivity but do not eliminate it.
+
+If richness increases strongly with depth, group comparisons may reflect sequencing effort rather than ecology.
+:::
+
+### What these plots show
+
+- Distribution of diversity within groups  
+- Variability across samples  
+- Dominance vs evenness patterns  
+
+### What they do not show
+
+- Absolute abundance  
+- Statistical significance  
+- Causation  
+- Confounder adjustment  
+
+Alpha diversity is descriptive unless formally tested.
+
+---
+
+:::next
+Next → [Ordination Plots](06-ordination-plots.qmd)
+:::

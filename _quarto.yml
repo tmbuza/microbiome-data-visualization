@@ -1,0 +1,31 @@
+project:
+  type: book
+  output-dir: docs
+
+# engine: knitr
+
+book:
+  title: "Microbiome Data Visualization"
+  chapters:
+    - index.qmd
+    - 01-preface.qmd
+    - 02-datasets.qmd
+    - 03-data-structure-and-prevalence.qmd
+    - 04-composition-visualization.qmd
+    - 05-diversity-analysis.qmd
+    - 06-ordination-plots.qmd
+    - 07-heatmaps-and-patterns.qmd
+    - 08-summary-and-next-steps.qmd
+
+format:
+  html:
+    toc: true
+    number-sections: false
+    css: assets/css/cdi.css
+
+execute:
+  echo: true
+  warning: false
+  message: false
+  freeze: auto
+  working-dir: .

@@ -1,0 +1,184 @@
+---
+title: "Data Structure and Prevalence"
+engine: knitr
+---
+
+# Data structure and prevalence
+
+Microbiome count data is structurally sparse and uneven.
+
+This chapter focuses on:
+
+1. Matrix sparsity  
+2. Library size variation  
+3. Taxa prevalence  
+
+## Load data
+
+```{r load-phyloseq-object}
+ps <- readRDS("data/moving-pictures-ps.rds")
+```
+
+## Sparsity
+
+```{r compute-sparsity}
+otu <- methods::as(phyloseq::otu_table(ps), "matrix")
+if (!phyloseq::taxa_are_rows(ps)) {
+  otu <- t(otu)
+}
+
+zero_prop <- mean(otu == 0)
+zero_prop
+```
+
+:::cdi-message
+A high proportion of zeros is normal in microbiome data.
+
+Filtering decisions are not cosmetic. They determine which patterns become visible.
+:::
+
+## Library size variation
+
+```{r compute-library-size}
+lib_size <- phyloseq::sample_sums(ps)
+summary(lib_size)
+
+df_lib <- data.frame(
+  sample_id = names(lib_size),
+  library_size = as.numeric(lib_size),
+  stringsAsFactors = FALSE
+)
+
+dir.create("outputs/tables", recursive = TRUE, showWarnings = FALSE)
+readr::write_csv(df_lib, "outputs/tables/library-size.csv")
+```
+
+### Library size distribution (Python)
+
+```{python plot-library-size}
+import pandas as pd
+import matplotlib.pyplot as plt
+
+df = pd.read_csv("outputs/tables/library-size.csv")
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.hist(df["library_size"], bins=25, edgecolor="white", linewidth=0.8)
+
+ax.set_title("Library size distribution")
+ax.set_xlabel("Library size (total reads per sample)")
+ax.set_ylabel("Number of samples")
+
+ax.grid(True, axis="y", alpha=0.25)
+ax.spines["top"].set_visible(False)
+ax.spines["right"].set_visible(False)
+
+fig.tight_layout()
+plt.show()
+```
+
+:::cdi-message
+When sequencing depth varies, raw counts are not comparable.
+
+Normalization is required for fair comparison across samples.
+:::
+
+## Detection and prevalence
+
+```{r compute-prevalence}
+detection <- 1
+
+taxa_prev_n <- rowSums(otu >= detection)
+taxa_prev_df <- data.frame(
+  taxon = rownames(otu),
+  prevalence_n = taxa_prev_n,
+  prevalence_frac = taxa_prev_n / ncol(otu),
+  stringsAsFactors = FALSE
+)
+
+summary(taxa_prev_df$prevalence_n)
+
+dir.create("outputs/tables", recursive = TRUE, showWarnings = FALSE)
+readr::write_csv(taxa_prev_df, "outputs/tables/taxa-prevalence.csv")
+```
+
+### Prevalence distribution (Python)
+
+```{python plot-prevalence}
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+df = pd.read_csv("outputs/tables/taxa-prevalence.csv")
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.hist(df["prevalence_n"], bins=25, edgecolor="white", linewidth=0.8)
+
+ax.set_title("Taxon prevalence distribution")
+ax.set_xlabel("Number of samples detected")
+ax.set_ylabel("Number of taxa")
+
+ax.grid(True, axis="y", alpha=0.25)
+ax.spines["top"].set_visible(False)
+ax.spines["right"].set_visible(False)
+
+fig.tight_layout()
+plt.show()
+
+# Optional: ECDF view (often clearer for sparse data)
+x = np.sort(df["prevalence_n"].to_numpy())
+y = np.arange(1, len(x) + 1) / len(x)
+
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.plot(x, y)
+ax.set_title("ECDF of taxon prevalence")
+ax.set_xlabel("Number of samples detected")
+ax.set_ylabel("Fraction of taxa")
+
+ax.grid(True, alpha=0.25)
+ax.spines["top"].set_visible(False)
+ax.spines["right"].set_visible(False)
+
+fig.tight_layout()
+plt.show()
+```
+
+:::cdi-message
+Most taxa are observed in only a small fraction of samples.
+
+Prevalence filtering improves clarity, but it also changes the feature space.
+Filtering rules must be stated explicitly.
+:::
+
+## Simple prevalence filter
+
+```{r prevalence-filter}
+min_prev_frac <- 0.10
+
+keep_taxa <- taxa_prev_df$taxon[taxa_prev_df$prevalence_frac >= min_prev_frac]
+ps_prev <- phyloseq::prune_taxa(keep_taxa, ps)
+
+c(original_taxa = phyloseq::ntaxa(ps), after_filter = phyloseq::ntaxa(ps_prev))
+```
+
+:::cdi-message
+Prevalence filtering reduces dimensionality and improves readability.
+
+It can also change ordination and diversity results. Interpretation should acknowledge these choices.
+:::
+
+## Relative abundance preview
+
+```{r relative-abundance-preview}
+ps_rel <- phyloseq::transform_sample_counts(ps, function(x) x / sum(x))
+range(phyloseq::sample_sums(ps_rel))
+```
+
+:::cdi-message
+After transformation, each sample sums to 1.
+
+This enables clearer visualization, but does not remove compositional constraints.
+:::
+
+:::next
+Next → [Composition Visualization](04-composition-visualization.qmd)
+:::

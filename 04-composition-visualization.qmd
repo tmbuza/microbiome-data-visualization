@@ -1,0 +1,235 @@
+---
+title: "Composition Visualization"
+engine: knitr
+---
+
+# Composition Visualization
+
+Composition plots are often the first figures shown in microbiome studies.
+
+Bar plots at the phylum or genus level are common. They appear intuitive.
+They are also easy to misinterpret.
+
+:::cdi-message
+Relative abundance plots do not show absolute change.
+
+They show proportions constrained to sum to one.
+:::
+
+This chapter focuses on:
+
+- transforming counts to relative abundance
+- aggregating taxa to a chosen rank
+- visualizing composition across metadata groups
+- understanding compositional limitations
+
+## Load data
+
+```{r load-phyloseq}
+library(phyloseq)
+
+ps <- readRDS("data/moving-pictures-ps.rds")
+```
+
+## Transform to relative abundance
+
+Raw counts are not comparable across samples with different sequencing depth.
+
+```{r transform-relative-abundance}
+ps_rel <- phyloseq::transform_sample_counts(ps, function(x) x / sum(x))
+range(phyloseq::sample_sums(ps_rel))
+```
+
+:::cdi-message
+Each sample now sums to 1.
+
+This enables proportional comparison across samples. However, relative abundance introduces compositional constraints.
+An increase in one taxon must decrease another.
+:::
+
+## Aggregate to genus level
+
+```{r aggregate-genus}
+ps_genus <- phyloseq::tax_glom(ps_rel, taxrank = "Genus")
+phyloseq::ntaxa(ps_genus)
+```
+
+Remove taxa without genus assignment:
+
+```{r drop-missing-genus}
+ps_genus <- phyloseq::subset_taxa(ps_genus, !is.na(Genus))
+phyloseq::ntaxa(ps_genus)
+```
+
+:::cdi-message
+Aggregation simplifies visualization, but it also hides within-genus variation.
+
+Resolution is always a trade-off.
+:::
+
+## Identify top genera
+
+To improve readability, select the globally most abundant genera.
+
+```{r select-top-genera}
+genus_abundance <- phyloseq::taxa_sums(ps_genus)
+top_genera <- names(sort(genus_abundance, decreasing = TRUE))[1:10]
+
+ps_top <- phyloseq::prune_taxa(top_genera, ps_genus)
+phyloseq::ntaxa(ps_top)
+```
+
+## Prepare composition table for plotting
+
+We will compute mean relative abundance by body site, then show two modern Python visualizations:
+a stacked bar chart and a heatmap.
+
+```{r export-composition-table}
+# Long format table (sample-level)
+df_comp <- phyloseq::psmelt(ps_top)
+
+# Detect column names robustly (psmelt can vary by dataset)
+cols <- names(df_comp)
+
+sample_col <- if ("Sample" %in% cols) "Sample" else if ("SampleID" %in% cols) "SampleID" else if ("sample_id" %in% cols) "sample_id" else NA_character_
+body_col   <- if ("body-site" %in% cols) "body-site" else if ("body.site" %in% cols) "body.site" else if ("body_site" %in% cols) "body_site" else NA_character_
+
+if (is.na(sample_col) || is.na(body_col)) {
+  stop(
+    "Expected columns not found in psmelt output.
+",
+    "Available columns: ", paste(cols, collapse = ", "), "
+",
+    "Missing: ",
+    paste(c(if (is.na(sample_col)) "Sample/SampleID" else NULL,
+            if (is.na(body_col)) "body-site/body.site/body_site" else NULL),
+          collapse = ", ")
+  )
+}
+
+# Keep only what we need and standardize names
+df_comp <- df_comp[, c(sample_col, "Abundance", "Genus", body_col)]
+names(df_comp) <- c("Sample", "Abundance", "Genus", "body_site")
+
+# Mean relative abundance by (body_site, Genus)
+df_mean <- aggregate(
+  Abundance ~ body_site + Genus,
+  data = df_comp,
+  FUN = mean
+)
+
+dir.create("outputs/tables", recursive = TRUE, showWarnings = FALSE)
+readr::write_csv(df_mean, "outputs/tables/mean-composition-body-site-genus.csv")
+
+head(df_mean)
+```
+
+:::cdi-message
+For overview plots, averaging within a group can reveal stable patterns that are hard to see at the sample level.
+
+This is descriptive summarization, not inference.
+:::
+
+## Composition by body site (Python stacked bar)
+
+```{python plot-composition-stacked}
+import pandas as pd
+import matplotlib.pyplot as plt
+
+df = pd.read_csv("outputs/tables/mean-composition-body-site-genus.csv")
+
+# Pivot to body-site x genus
+wide = df.pivot(index="body_site", columns="Genus", values="Abundance").fillna(0)
+
+# Ensure consistent order (largest total first)
+wide = wide.loc[wide.sum(axis=1).sort_values(ascending=False).index]
+
+fig, ax = plt.subplots(figsize=(9, 5))
+
+bottom = None
+for col in wide.columns:
+    vals = wide[col].to_numpy()
+    if bottom is None:
+        ax.bar(wide.index, vals, label=col)
+        bottom = vals
+    else:
+        ax.bar(wide.index, vals, bottom=bottom, label=col)
+        bottom = bottom + vals
+
+ax.set_title("Mean genus composition by body site")
+ax.set_xlabel("Body site")
+ax.set_ylabel("Mean relative abundance")
+
+ax.grid(True, axis="y", alpha=0.25)
+ax.spines["top"].set_visible(False)
+ax.spines["right"].set_visible(False)
+
+# Legend outside for readability
+ax.legend(title="Genus", bbox_to_anchor=(1.02, 1), loc="upper left", frameon=False)
+
+fig.tight_layout()
+plt.show()
+```
+
+:::cdi-message
+These bars show average proportions, not absolute microbial load.
+
+A taxon can appear to “increase” in relative abundance even if its absolute abundance is unchanged.
+:::
+
+## Composition heatmap (Python)
+
+```{python plot-composition-heatmap}
+import pandas as pd
+import matplotlib.pyplot as plt
+
+df = pd.read_csv("outputs/tables/mean-composition-body-site-genus.csv")
+wide = df.pivot(index="body_site", columns="Genus", values="Abundance").fillna(0)
+
+# Order rows and columns by overall abundance
+wide = wide.loc[wide.sum(axis=1).sort_values(ascending=False).index]
+wide = wide[wide.sum(axis=0).sort_values(ascending=False).index]
+
+fig, ax = plt.subplots(figsize=(9, 5))
+im = ax.imshow(wide.values, aspect="auto")
+
+ax.set_title("Heatmap of mean genus composition")
+ax.set_xlabel("Genus")
+ax.set_ylabel("Body site")
+
+ax.set_yticks(range(len(wide.index)))
+ax.set_yticklabels(list(wide.index))
+
+ax.set_xticks(range(len(wide.columns)))
+ax.set_xticklabels(list(wide.columns), rotation=45, ha="right")
+
+cbar = fig.colorbar(im, ax=ax)
+cbar.set_label("Mean relative abundance")
+
+fig.tight_layout()
+plt.show()
+```
+
+:::cdi-message
+Heatmaps emphasize patterns of dominance and absence across groups.
+
+They are sensitive to aggregation level and filtering choices.
+:::
+
+## Limitations of composition plots
+
+Composition plots:
+
+- are constrained by constant-sum scaling
+- cannot reveal absolute abundance changes
+- are sensitive to filtering and aggregation level
+
+:::cdi-message
+Composition plots answer: "What proportion of the community does each taxon occupy?"
+
+They do not answer: "Did the taxon increase in absolute abundance?"
+:::
+
+:::next
+Next → [Diversity Analysis](05-diversity-analysis.qmd)
+:::

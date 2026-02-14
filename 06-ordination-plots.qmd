@@ -1,0 +1,305 @@
+# Ordination Plots
+
+Ordination reduces a complex community table into a small number of axes that summarize between-sample dissimilarity.
+
+The goal is not to compress biology into two numbers.
+The goal is to visualize structure, then interpret it cautiously.
+
+:::cdi-message
+Ordination shows patterns of similarity between samples.
+
+It does not explain why samples differ.
+Interpretation requires context, careful preprocessing, and validation.
+:::
+
+This chapter focuses on:
+
+- Bray–Curtis distance and why it is common
+- PCoA ordination and what the axes mean
+- how to read clustering and overlap
+- how to avoid common interpretation traps
+
+---
+
+## Load data
+
+```{r load-phyloseq}
+library(phyloseq)
+library(vegan)
+
+ps <- readRDS("data/moving-pictures-ps.rds")
+```
+
+---
+
+## Transform to relative abundance
+
+Bray–Curtis is commonly applied to relative abundance in exploratory ordination.
+This does not remove compositional constraints, but it enables clearer comparison across samples.
+
+```{r transform-relative}
+ps_rel <- phyloseq::transform_sample_counts(ps, function(x) x / sum(x))
+```
+
+:::cdi-message
+Relative abundance ordination is descriptive.
+
+If you change filtering or aggregation choices, the geometry can change.
+This is expected and should be reported.
+:::
+
+---
+
+## Compute Bray–Curtis distance
+
+```{r bray-curtis-distance}
+dist_bc <- phyloseq::distance(ps_rel, method = "bray")
+dist_bc
+```
+
+---
+
+## PCoA ordination
+
+```{r pcoa-ordination}
+ord <- phyloseq::ordinate(ps_rel, method = "PCoA", distance = dist_bc)
+
+# Coordinates for the first two axes
+coords <- as.data.frame(ord$vectors[, 1:2])
+colnames(coords) <- c("PC1", "PC2")
+
+# Percent variance explained (if available)
+eig <- ord$values$Relative_eig
+var_pc1 <- if (!is.null(eig) && length(eig) >= 1) eig[1] * 100 else NA_real_
+var_pc2 <- if (!is.null(eig) && length(eig) >= 2) eig[2] * 100 else NA_real_
+
+meta <- data.frame(phyloseq::sample_data(ps_rel))
+meta$sample_id <- rownames(meta)
+
+coords$sample_id <- rownames(coords)
+ord_df <- merge(coords, meta, by = "sample_id", all.x = TRUE)
+
+# Robust body site column detection
+cols <- names(ord_df)
+body_col <- intersect(c("body-site", "body.site", "body_site"), cols)
+
+if (length(body_col) == 0) {
+  stop("Body site column not found in metadata. Available columns: ", paste(cols, collapse = ", "))
+}
+
+ord_df$body_site <- ord_df[[body_col[1]]]
+
+# Store variance labels for plotting
+ord_df$pc1_label <- ifelse(is.na(var_pc1), "PC1", sprintf("PC1 (%.1f%%)", var_pc1))
+ord_df$pc2_label <- ifelse(is.na(var_pc2), "PC2", sprintf("PC2 (%.1f%%)", var_pc2))
+
+dir.create("outputs/tables", recursive = TRUE, showWarnings = FALSE)
+readr::write_csv(ord_df, "outputs/tables/ordination-pcoa.csv")
+
+# Save variance info (optional)
+var_df <- data.frame(PC1 = var_pc1, PC2 = var_pc2)
+readr::write_csv(var_df, "outputs/tables/ordination-variance.csv")
+
+head(ord_df[, c("sample_id","PC1","PC2","body_site")])
+```
+
+:::cdi-message
+PCoA axes are not biological variables.
+
+They are directions that best summarize pairwise dissimilarities.
+Axis labels are useful, but do not overinterpret them.
+:::
+
+---
+
+## Ordination plot (Python)
+
+This plot uses Python for a clean, modern visualization layer.
+It includes points, group centroids, and confidence ellipses.
+
+```{python plot-ordination-seaborn}
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
+
+df = pd.read_csv("outputs/tables/ordination-pcoa.csv").dropna(subset=["body_site"])
+
+# Palette customization
+palette_name = "Set1"   # Try: "Set1", "tab10", "colorblind", "viridis"
+groups = list(df["body_site"].astype(str).unique())
+palette = sns.color_palette(palette_name, n_colors=len(groups))
+color_map = dict(zip(groups, palette))
+
+sns.set_theme(style="whitegrid", context="notebook")
+
+def add_confidence_ellipse(ax, x, y, n_std=1.96, **kwargs):
+    x = np.asarray(x)
+    y = np.asarray(y)
+    if len(x) < 3:
+        return
+
+    cov = np.cov(x, y)
+    if np.any(~np.isfinite(cov)):
+        return
+
+    vals, vecs = np.linalg.eigh(cov)
+    order = vals.argsort()[::-1]
+    vals = vals[order]
+    vecs = vecs[:, order]
+
+    theta = np.degrees(np.arctan2(*vecs[:, 0][::-1]))
+
+    width, height = 2 * n_std * np.sqrt(vals)
+    ell = Ellipse(
+        xy=(np.mean(x), np.mean(y)),
+        width=width,
+        height=height,
+        angle=theta,
+        **kwargs
+    )
+    ax.add_patch(ell)
+
+# Axis labels with variance if present
+pc1_label = df["pc1_label"].iloc[0] if "pc1_label" in df.columns else "PC1"
+pc2_label = df["pc2_label"].iloc[0] if "pc2_label" in df.columns else "PC2"
+
+fig, ax = plt.subplots(figsize=(8.5, 6))
+
+# Points
+sns.scatterplot(
+    data=df,
+    x="PC1",
+    y="PC2",
+    hue="body_site",
+    palette=color_map,
+    s=65,
+    alpha=0.85,
+    edgecolor="black",
+    linewidth=0.35,
+    ax=ax
+)
+
+# Centroids and ellipses
+for g in groups:
+    sub = df[df["body_site"].astype(str) == g]
+    cx, cy = sub["PC1"].mean(), sub["PC2"].mean()
+
+    ax.scatter([cx], [cy], s=160, marker="X", edgecolor="black", linewidth=0.6, zorder=5)
+
+    add_confidence_ellipse(
+        ax,
+        sub["PC1"],
+        sub["PC2"],
+        n_std=1.96,
+        facecolor=color_map[g],
+        alpha=0.12,
+        edgecolor=color_map[g],
+        linewidth=1.2
+    )
+
+ax.set_title("PCoA (Bray–Curtis distance)", weight="bold")
+ax.set_xlabel(pc1_label)
+ax.set_ylabel(pc2_label)
+
+ax.axhline(0, linewidth=0.6, alpha=0.6)
+ax.axvline(0, linewidth=0.6, alpha=0.6)
+
+sns.despine(ax=ax)
+ax.legend(title="Body site", bbox_to_anchor=(1.02, 1), loc="upper left", frameon=False)
+
+fig.tight_layout()
+plt.show()
+```
+
+:::cdi-message
+Interpretation starts with distance.
+
+Points close together represent samples with similar community composition under the chosen distance and preprocessing.
+Points far apart represent larger compositional differences.
+:::
+
+---
+
+## Reading the plot responsibly
+
+### What clustering can suggest
+
+- Distinct clusters by group can indicate systematic differences in composition.
+- Overlap can indicate weak separation or high within-group variability.
+- A single outlier can stretch the geometry and distort visual separation.
+
+### What ordination does not tell you
+
+- It does not identify which taxa drive separation.
+- It does not prove statistical significance.
+- It does not separate technical effects from biology.
+
+:::cdi-message
+A clean separation in an ordination plot is a hypothesis generator.
+
+It should lead to targeted follow-up, not a final conclusion.
+:::
+
+---
+
+## Optional: PERMANOVA (group differences)
+
+PERMANOVA tests whether group centroids differ in multivariate space.
+
+```{r permanova}
+meta_df <- data.frame(phyloseq::sample_data(ps_rel))
+cols <- names(meta_df)
+body_col <- intersect(c("body-site", "body.site", "body_site"), cols)
+
+if (length(body_col) == 0) {
+  stop("Body site column not found for PERMANOVA.")
+}
+
+meta_df$body_site <- meta_df[[body_col[1]]]
+
+vegan::adonis2(dist_bc ~ body_site, data = meta_df)
+```
+
+:::cdi-message
+A significant PERMANOVA result means group centroids differ.
+
+It can also be driven by unequal within-group dispersion.
+This is why dispersion should be checked.
+:::
+
+---
+
+## Optional: dispersion check (beta dispersion)
+
+```{r dispersion-check}
+meta_df <- data.frame(phyloseq::sample_data(ps_rel))
+cols <- names(meta_df)
+body_col <- intersect(c("body-site", "body.site", "body_site"), cols)
+
+meta_df$body_site <- meta_df[[body_col[1]]]
+
+bd <- vegan::betadisper(dist_bc, group = meta_df$body_site)
+bd
+vegan::permutest(bd)
+```
+
+:::cdi-message
+If dispersion differs strongly across groups, PERMANOVA can appear significant even without true centroid separation.
+
+Interpretation should report both results.
+:::
+
+---
+
+## Takeaway
+
+- Ordination summarizes dissimilarity, not biology.
+- The distance metric and preprocessing choices define the geometry.
+- Visual separation is descriptive. Statistical tests support interpretation.
+- Always check dispersion when using PERMANOVA.
+
+:::next
+Next → [Heatmaps and Patterns](07-heatmaps-and-patterns.qmd)
+:::

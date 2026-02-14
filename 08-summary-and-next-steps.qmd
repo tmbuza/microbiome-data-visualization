@@ -1,0 +1,192 @@
+# Summary and Next Steps
+
+This guide introduced a practical workflow for visualizing microbiome data.
+
+The goal was not to memorize plotting code.
+The goal was to build a reliable interpretation habit:
+
+- understand the data structure
+- check sparsity and sequencing depth
+- visualize composition with awareness of compositional constraints
+- summarize diversity with depth sensitivity in mind
+- use ordination as hypothesis generation
+- use heatmaps to inspect patterns, not to declare conclusions
+
+:::cdi-message
+A figure is not the conclusion.
+
+A figure is a structured view of the data under explicit assumptions.
+The quality of interpretation depends on whether those assumptions are stated and tested.
+:::
+
+---
+
+## What you can now do
+
+By the end of this guide you can:
+
+- load and reuse a canonical `phyloseq` object
+- recognize sparsity as a biological feature, not an error
+- interpret sequencing depth and why it matters for richness
+- build composition plots that are honest about limitations
+- read diversity plots without confusing depth effects for biology
+- interpret ordination as distance-based geometry
+- use heatmaps to discover co-occurrence patterns
+
+---
+
+## A compact checklist for new datasets
+
+Use this checklist whenever you start a new microbiome dataset.
+
+### Structure
+
+- Do samples align across abundance and metadata?
+- Are taxa identifiers consistent across tables?
+- Are there missing or duplicated sample IDs?
+
+### Sparsity
+
+- What fraction of the matrix is zero?
+- Are there taxa present in only 1–2 samples?
+- Will a prevalence threshold improve clarity?
+
+### Depth
+
+- Are library sizes comparable across groups?
+- Does observed richness strongly track depth?
+- Do conclusions change under a depth sensitivity check?
+
+### Composition
+
+- Are you comparing proportions or absolute abundance?
+- Did you state the taxonomic rank and top-N choice?
+- Would the story change if you aggregated differently?
+
+### Diversity and ordination
+
+- Which alpha metric matches the question?
+- Which beta distance matches the data and interpretation?
+- If you run PERMANOVA, did you check dispersion?
+
+:::cdi-message
+Most interpretation problems come from skipping one of the checklist blocks.
+
+The fix is almost always upstream, not in the plotting code.
+:::
+
+---
+
+## Save a small “results snapshot” (R → Python)
+
+A practical habit is to export a small results bundle that can be reloaded later.
+
+We will export:
+
+- library size summary
+- alpha diversity table
+- ordination coordinates
+
+```{r export-snapshot}
+dir.create("outputs/snapshots", recursive = TRUE, showWarnings = FALSE)
+
+ps <- readRDS("data/moving-pictures-ps.rds")
+
+# Library size
+lib_size <- phyloseq::sample_sums(ps)
+df_lib <- data.frame(sample_id = names(lib_size), library_size = as.numeric(lib_size))
+readr::write_csv(df_lib, "outputs/snapshots/library-size.csv")
+
+# Alpha diversity (simple, reproducible)
+otu <- methods::as(phyloseq::otu_table(ps), "matrix")
+if (!phyloseq::taxa_are_rows(ps)) otu <- t(otu)
+
+observed <- colSums(otu > 0)
+shannon  <- vegan::diversity(t(otu), index = "shannon")
+
+alpha_df <- data.frame(
+  sample_id = colnames(otu),
+  observed = observed,
+  shannon = shannon,
+  stringsAsFactors = FALSE
+)
+
+meta <- data.frame(phyloseq::sample_data(ps))
+meta$sample_id <- rownames(meta)
+alpha_df <- merge(alpha_df, meta, by = "sample_id", all.x = TRUE)
+
+cols <- names(alpha_df)
+body_col <- intersect(c("body-site", "body.site", "body_site"), cols)
+if (length(body_col) == 0) stop("Body site column not found in metadata.")
+alpha_df$body_site <- alpha_df[[body_col[1]]]
+
+readr::write_csv(alpha_df, "outputs/snapshots/alpha-diversity-mini.csv")
+
+# Ordination coordinates (PCoA, Bray–Curtis, rel abundance)
+ps_rel <- phyloseq::transform_sample_counts(ps, function(x) x / sum(x))
+dist_bc <- phyloseq::distance(ps_rel, method = "bray")
+ord <- phyloseq::ordinate(ps_rel, method = "PCoA", distance = dist_bc)
+
+coords <- as.data.frame(ord$vectors[, 1:2])
+colnames(coords) <- c("PC1", "PC2")
+coords$sample_id <- rownames(coords)
+
+ord_df <- merge(coords, meta, by = "sample_id", all.x = TRUE)
+cols <- names(ord_df)
+body_col <- intersect(c("body-site", "body.site", "body_site"), cols)
+if (length(body_col) == 0) stop("Body site column not found in ordination metadata.")
+ord_df$body_site <- ord_df[[body_col[1]]]
+
+readr::write_csv(ord_df, "outputs/snapshots/ordination-pcoa.csv")
+
+c("library-size.csv", "alpha-diversity-mini.csv", "ordination-pcoa.csv")
+```
+
+```{python quick-snapshot-peek}
+import pandas as pd
+
+lib = pd.read_csv("outputs/snapshots/library-size.csv")
+alpha = pd.read_csv("outputs/snapshots/alpha-diversity-mini.csv")
+ordn = pd.read_csv("outputs/snapshots/ordination-pcoa.csv")
+
+print("Library size rows:", lib.shape[0])
+print("Alpha diversity rows:", alpha.shape[0])
+print("Ordination rows:", ordn.shape[0])
+
+alpha[["sample_id","body_site","observed","shannon"]].head()
+```
+
+:::cdi-message
+A snapshot makes your workflow restartable.
+
+You can reproduce plots without rerunning every upstream step.
+This is a small habit that prevents large confusion later.
+:::
+
+---
+
+## Where to go next
+
+If you are continuing this dataset:
+
+- Try different taxonomic ranks (Family, Genus, ASV) and compare stability.
+- Try alternative distances (Jaccard for presence/absence; Aitchison for compositional analysis).
+- Connect patterns to biology by identifying taxa that drive separation.
+
+If you are starting a new dataset:
+
+- Re-run the checklist.
+- Rebuild the canonical object for the new data.
+- Keep decisions explicit and version controlled.
+
+---
+
+:::cdi-message
+The fastest way to improve interpretation is not adding more plots.
+
+It is improving the logic that connects each plot to a question you can defend.
+:::
+
+:::next
+Next → return to the start: [Preface](01-preface.qmd)
+:::

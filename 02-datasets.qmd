@@ -1,0 +1,104 @@
+# Datasets {#datasets}
+
+This guide uses the **QIIME2 Moving Pictures** demo dataset.
+
+The data are downloaded as QIIME2 artifacts and converted into a single
+`phyloseq` object using reproducible scripts:
+
+- `scripts/R/00-download-qiime2-demo-data.R`
+- `scripts/R/01-create-phyloseq-object.R`
+
+Those scripts:
+
+- download the feature table, taxonomy, and metadata
+- align sample identifiers
+- construct a validated `phyloseq` object
+- save a canonical `.rds` file for reuse across chapters
+
+From this point onward, we work with one structured object.
+
+## Load the canonical object
+
+```{r load-canonical-phyloseq}
+library(phyloseq)
+
+ps <- readRDS("data/moving-pictures-ps.rds")
+```
+
+:::cdi-message
+A microbiome dataset is not a single table.
+
+It is a coordinated structure containing:
+- an abundance matrix  
+- sample-level metadata  
+- taxonomic annotation  
+
+All components must align exactly.
+:::
+
+## Inspect the OTU table
+
+```{r inspect-otu-table}
+otu <- methods::as(phyloseq::otu_table(ps), "matrix")
+
+if (!phyloseq::taxa_are_rows(ps)) {
+  otu <- t(otu)
+}
+
+otu[1:6, 1:6]
+```
+
+:::cdi-message
+This is a small slice of the count matrix.
+
+- Rows represent taxa (ASVs)  
+- Columns represent samples  
+- Values are raw read counts  
+
+Most entries are zero.
+
+Sparsity is not a technical artifact. It is a biological reality.
+:::
+
+## Inspect sample metadata
+
+```{r inspect-sample-metadata}
+head(phyloseq::sample_data(ps))
+```
+
+:::cdi-message
+Metadata provides the biological and experimental context.
+
+Without metadata, abundance values have no meaning. Visualization is
+always performed relative to metadata.
+:::
+
+## Inspect taxonomy
+
+```{r inspect-taxonomy}
+head(phyloseq::tax_table(ps))
+```
+
+:::cdi-message
+Taxonomy links sequence variants to biological hierarchy.
+
+Aggregation (for example genus-level barplots) depends entirely on this
+mapping. If taxonomy is inconsistent, interpretation becomes unstable.
+:::
+
+## Structural integrity
+
+```{r check-structural-integrity}
+all(phyloseq::sample_names(ps) == 
+    rownames(phyloseq::sample_data(ps)))
+```
+
+:::cdi-message
+A valid `phyloseq` object guarantees alignment across components.
+
+Many downstream errors originate from mismatched sample identifiers.
+:::
+
+:::next
+Next → [Data Structure and Prevalence](03-data-structure-and-prevalence.qmd)
+:::

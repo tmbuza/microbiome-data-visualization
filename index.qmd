@@ -1,0 +1,13 @@
+---
+title: ""
+engine: knitr
+---
+<div style="text-align: center; margin-top: 1.5em;">
+  <img src="assets/images/cover/microbiome-data-visualization-cover.png" width="75%" />
+</div>
+
+<div style="text-align: center; font-style: normal; margin-top: 1em;">
+Free Guide · Updated `r format(Sys.Date(), "%b %Y")`
+</div>
+
+
