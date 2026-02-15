@@ -7,7 +7,9 @@
 docs/
 venv/
 
+
 # renv (commit infrastructure + lockfile, ignore heavy library)
+renv/
 renv/library/
 renv/staging/
 _bookdown_files/
