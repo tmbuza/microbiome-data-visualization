@@ -23,4 +23,3 @@ jobs:
           publish_branch: gh-pages
           cname: microbiome.complexdatainsights.com
           force_orphan: true
-name: Deploy GitHub Pages (from docs)
