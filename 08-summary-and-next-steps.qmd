@@ -165,27 +165,71 @@ This is a small habit that prevents large confusion later.
 
 ---
 
-## Where to go next
+## Where to Go Next
 
-If you are continuing this dataset:
+If you are continuing with this dataset:
 
-- Try different taxonomic ranks (Family, Genus, ASV) and compare stability.
-- Try alternative distances (Jaccard for presence/absence; Aitchison for compositional analysis).
-- Connect patterns to biology by identifying taxa that drive separation.
+- Compare taxonomic resolution (Family, Genus, ASV) and assess stability.
+- Explore alternative distances (Jaccard for presence/absence; Aitchison for compositional structure).
+- Identify taxa that most strongly contribute to observed separation.
 
 If you are starting a new dataset:
 
-- Re-run the checklist.
-- Rebuild the canonical object for the new data.
-- Keep decisions explicit and version controlled.
+- Re-run the structural checklist.
+- Rebuild a canonical object.
+- Keep transformation and filtering decisions explicit and version controlled.
 
 ---
 
 :::cdi-message
 The fastest way to improve interpretation is not adding more plots.
 
-It is improving the logic that connects each plot to a question you can defend.
+It is strengthening the logic that connects each plot to a defensible biological question.
 :::
+
+---
+
+## Beyond Descriptive Visualization
+
+This guide focused on structural clarity and visualization:
+
+- composition  
+- diversity  
+- ordination  
+- clustering patterns  
+
+These approaches describe what the data look like.
+
+They do not yet address:
+
+- Whether differences are statistically robust  
+- How much variance is explained by specific variables  
+- How covariates influence interpretation  
+- How to reconcile conflicting signals across metrics  
+
+These questions require inferential modeling and more advanced analytical design.
+
+The extended continuation of this guide explores:
+
+- PERMANOVA and multivariate hypothesis testing  
+- constrained ordination  
+- variance partitioning  
+- model-based approaches  
+- structured interpretation workflows  
+
+The objective is not to add more figures.
+
+It is to reason more rigorously about biological signal.
+
+---
+
+## Continue the Learning Path
+
+The premium continuation of this guide expands these topics in depth:
+
+→ https://complexdatainsights.com/microbiome-premium
+
+It builds from the same dataset and structure, but moves from descriptive visualization toward formal inference and analytical decision-making.
 
 <!-- :::next
 Next → return to the start: [Preface](01-preface.qmd)
