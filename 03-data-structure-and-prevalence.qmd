@@ -1,8 +1,3 @@
----
-title: "Data Structure and Prevalence"
-engine: knitr
----
-
 # Data structure and prevalence
 
 Microbiome count data is structurally sparse and uneven.
@@ -17,6 +12,38 @@ This chapter focuses on:
 
 ```{r load-phyloseq-object}
 ps <- readRDS("data/moving-pictures-ps.rds")
+```
+
+## Plot theme
+
+```{r cdi-plot-theme}
+# ------------------------------------------------------------
+# CDI Modern Plot Theme (Free Track Standard)
+# ------------------------------------------------------------
+cdi_teal <- "#036281"
+cdi_yellow <- "#f7c546"
+cdi_muted <- "#475569"
+
+cdi_plot_theme <- function(base_size = 14) {
+  ggplot2::theme_minimal(base_size = base_size) +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(
+        size = 22,
+        face = "bold",
+        hjust = 0.5
+      ),
+      plot.subtitle = ggplot2::element_text(
+        size = 16,
+        hjust = 0.5,
+        margin = ggplot2::margin(b = 10)
+      ),
+      axis.title = ggplot2::element_text(
+        face = "bold"
+      ),
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.grid.major.x = ggplot2::element_blank()
+    )
+}
 ```
 
 ## Sparsity
@@ -53,27 +80,29 @@ dir.create("outputs/tables", recursive = TRUE, showWarnings = FALSE)
 readr::write_csv(df_lib, "outputs/tables/library-size.csv")
 ```
 
-### Library size distribution (Python)
+### Library size distribution
 
-```{python plot-library-size}
-import pandas as pd
-import matplotlib.pyplot as plt
-
-df = pd.read_csv("outputs/tables/library-size.csv")
-
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.hist(df["library_size"], bins=25, edgecolor="white", linewidth=0.8)
-
-ax.set_title("Library size distribution")
-ax.set_xlabel("Library size (total reads per sample)")
-ax.set_ylabel("Number of samples")
-
-ax.grid(True, axis="y", alpha=0.25)
-ax.spines["top"].set_visible(False)
-ax.spines["right"].set_visible(False)
-
-fig.tight_layout()
-plt.show()
+```{r plot-library-size}
+ggplot2::ggplot(df_lib, ggplot2::aes(x = library_size)) +
+  ggplot2::geom_histogram(
+    ggplot2::aes(y = ggplot2::after_stat(density)),
+    bins = 30,
+    fill = cdi_teal,
+    color = "white",
+    alpha = 0.90
+  ) +
+  ggplot2::geom_density(color = cdi_yellow, linewidth = 1.2) +
+  ggplot2::scale_y_continuous(labels = scales::label_number()) +
+  ggplot2::labs(
+    title = "Library size distribution",
+    subtitle = "Sequencing depth varies across samples",
+    x = "Library size (total reads per sample)",
+    y = "Density"
+  ) +
+  cdi_plot_theme() +
+  ggplot2::theme(
+    plot.subtitle = ggplot2::element_text(color = cdi_muted)
+  )
 ```
 
 :::cdi-message
@@ -101,45 +130,35 @@ dir.create("outputs/tables", recursive = TRUE, showWarnings = FALSE)
 readr::write_csv(taxa_prev_df, "outputs/tables/taxa-prevalence.csv")
 ```
 
-### Prevalence distribution (Python)
+### Prevalence distribution
 
-```{python plot-prevalence}
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
+```{r plot-prevalence}
+# Histogram view
+ggplot2::ggplot(taxa_prev_df, ggplot2::aes(x = prevalence_n)) +
+  ggplot2::geom_histogram(
+    bins = 30,
+    fill = cdi_teal,
+    color = "white",
+    alpha = 0.90
+  ) +
+  ggplot2::labs(
+    title = "Taxon prevalence distribution",
+    subtitle = "Most taxa are detected in few samples",
+    x = "Number of samples detected",
+    y = "Number of taxa"
+  ) +
+  cdi_plot_theme()
 
-df = pd.read_csv("outputs/tables/taxa-prevalence.csv")
-
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.hist(df["prevalence_n"], bins=25, edgecolor="white", linewidth=0.8)
-
-ax.set_title("Taxon prevalence distribution")
-ax.set_xlabel("Number of samples detected")
-ax.set_ylabel("Number of taxa")
-
-ax.grid(True, axis="y", alpha=0.25)
-ax.spines["top"].set_visible(False)
-ax.spines["right"].set_visible(False)
-
-fig.tight_layout()
-plt.show()
-
-# Optional: ECDF view (often clearer for sparse data)
-x = np.sort(df["prevalence_n"].to_numpy())
-y = np.arange(1, len(x) + 1) / len(x)
-
-fig, ax = plt.subplots(figsize=(8, 5))
-ax.plot(x, y)
-ax.set_title("ECDF of taxon prevalence")
-ax.set_xlabel("Number of samples detected")
-ax.set_ylabel("Fraction of taxa")
-
-ax.grid(True, alpha=0.25)
-ax.spines["top"].set_visible(False)
-ax.spines["right"].set_visible(False)
-
-fig.tight_layout()
-plt.show()
+# ECDF view (often clearer for sparse data)
+ggplot2::ggplot(taxa_prev_df, ggplot2::aes(x = prevalence_n)) +
+  ggplot2::stat_ecdf(geom = "step", color = cdi_teal, linewidth = 1.2) +
+  ggplot2::labs(
+    title = "ECDF of taxon prevalence",
+    subtitle = "Fraction of taxa detected by at least N samples",
+    x = "Number of samples detected",
+    y = "Fraction of taxa"
+  ) +
+  cdi_plot_theme()
 ```
 
 :::cdi-message

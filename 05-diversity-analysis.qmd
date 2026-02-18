@@ -1,13 +1,8 @@
----
-title: "Diversity Analysis"
-engine: knitr
----
-
 # Diversity Analysis
 
 Alpha diversity summaries are common in microbiome studies.
 
-They are useful — but only when interpreted carefully.
+They are useful, but only when interpreted carefully.
 
 This chapter focuses on:
 
@@ -18,76 +13,81 @@ This chapter focuses on:
 :::cdi-message
 Alpha diversity is not a single concept.
 
-Different metrics emphasize richness, evenness, and dominance differently.
-Interpretation depends on the metric.
+Each metric measures a different aspect of within-sample structure.
+
+Always interpret alpha diversity alongside sequencing depth and preprocessing choices.
 :::
 
----
+## Load data
 
-## Load Data
-
-```{r load-data}
-library(phyloseq)
-library(vegan)
-
+```{r load-phyloseq-object}
 ps <- readRDS("data/moving-pictures-ps.rds")
 ```
 
----
+## Check sequencing depth
 
-## Check Sequencing Depth (R → Python)
+Sequencing depth varies across samples. This affects detection of rare taxa and can influence alpha diversity.
 
-Alpha diversity is sensitive to sequencing depth.
-
-```{r export-library-size}
+```{r compute-library-size}
 lib_size <- phyloseq::sample_sums(ps)
 
-df_lib <- data.frame(
+lib_df <- data.frame(
   sample_id = names(lib_size),
   library_size = as.numeric(lib_size),
   stringsAsFactors = FALSE
 )
-
-dir.create("outputs/tables", recursive = TRUE, showWarnings = FALSE)
-readr::write_csv(df_lib, "outputs/tables/library-size.csv")
-
-summary(df_lib$library_size)
 ```
 
-```{python plot-library-size}
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-df = pd.read_csv("outputs/tables/library-size.csv")
-
-sns.set_theme(style="whitegrid")
-
-plt.figure(figsize=(9,5))
-sns.histplot(df["library_size"], bins=30, kde=True)
-
-plt.title("Sequencing depth distribution")
-plt.xlabel("Library size (total reads per sample)")
-plt.ylabel("Number of samples")
-
-sns.despine()
-plt.tight_layout()
-plt.show()
+```{r plot-library-size, fig.width=10, fig.height=6}
+ggplot2::ggplot(lib_df, ggplot2::aes(x = library_size)) +
+  ggplot2::geom_histogram(
+    bins = 25,
+    fill = "#036281",
+    color = "white",
+    linewidth = 0.3
+  ) +
+  ggplot2::labs(
+    title = "Sequencing depth distribution",
+    subtitle = "Library size varies across samples",
+    x = "Library size (total reads per sample)",
+    y = "Number of samples"
+  ) +
+  ggplot2::theme_bw(base_size = 13) +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5, color = "#475569"),
+    panel.grid.minor = ggplot2::element_blank()
+  )
 ```
 
 :::cdi-message
-If sequencing depth varies widely, observed richness may vary even if communities are identical.
+If sequencing depth varies strongly, raw richness is not directly comparable.
 
-Depth inspection is part of interpretation, not an optional diagnostic.
+Common strategies include rarefaction (for specific use cases) or model-based approaches.
+For this guide, we focus on interpretation and keep preprocessing explicit.
 :::
 
----
+### Save sequencing depth table (for reproducibility)
 
-## Compute Alpha Diversity (R)
+```{r export-library-size}
+dir.create("outputs/tables", recursive = TRUE, showWarnings = FALSE)
+readr::write_csv(lib_df, "outputs/tables/library-size.csv")
+```
+
+## Compute alpha diversity
+
+We compute four common metrics:
+
+- **Observed richness**: number of detected taxa
+- **Shannon**: richness + evenness
+- **Simpson**: dominance-weighted diversity
+- **Pielou**: evenness derived from Shannon
 
 ```{r compute-alpha}
 otu <- methods::as(phyloseq::otu_table(ps), "matrix")
-if (!phyloseq::taxa_are_rows(ps)) otu <- t(otu)
+if (!phyloseq::taxa_are_rows(ps)) {
+  otu <- t(otu)
+}
 
 observed <- colSums(otu > 0)
 shannon  <- vegan::diversity(t(otu), index = "shannon")
@@ -96,10 +96,10 @@ pielou   <- shannon / log(pmax(observed, 1))
 
 alpha_df <- data.frame(
   sample_id = colnames(otu),
-  observed  = observed,
-  shannon   = shannon,
-  simpson   = simpson,
-  pielou    = pielou,
+  observed  = as.numeric(observed),
+  shannon   = as.numeric(shannon),
+  simpson   = as.numeric(simpson),
+  pielou    = as.numeric(pielou),
   stringsAsFactors = FALSE
 )
 
@@ -118,131 +118,96 @@ if (length(body_col) == 0) {
   )
 }
 
-alpha_df$body_site <- alpha_df[[body_col[1]]]
-alpha_df$library_size <- phyloseq::sample_sums(ps)[alpha_df$sample_id]
+alpha_df$body_site <- as.character(alpha_df[[body_col[1]]])
+alpha_df <- alpha_df[!is.na(alpha_df$body_site) & alpha_df$body_site != "", , drop = FALSE]
+```
 
+### Save alpha diversity table (for reproducibility)
+
+```{r export-alpha}
 readr::write_csv(alpha_df, "outputs/tables/alpha-diversity.csv")
-
-head(alpha_df)
 ```
-
----
-
-## Visualize Alpha Diversity (Python, Seaborn)
-
-```{python alpha-boxplots}
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-df = pd.read_csv("outputs/tables/alpha-diversity.csv")
-df = df.dropna(subset=["body_site"])
-
-sns.set_theme(style="whitegrid")
-
-metrics = [
-    ("observed", "Observed richness"),
-    ("shannon", "Shannon diversity"),
-    ("simpson", "Simpson diversity"),
-    ("pielou", "Pielou evenness"),
-]
-
-order = (
-    df.groupby("body_site")["observed"]
-    .median()
-    .sort_values(ascending=False)
-    .index
-)
-
-for col, title in metrics:
-    fig, ax = plt.subplots(figsize=(9,5))
-
-    sns.boxplot(
-        data=df,
-        x="body_site",
-        y=col,
-        order=order,
-        showfliers=False,
-        width=0.6,
-        ax=ax
-    )
-
-    sns.stripplot(
-        data=df,
-        x="body_site",
-        y=col,
-        order=order,
-        size=3,
-        alpha=0.4,
-        jitter=0.25,
-        ax=ax
-    )
-
-    ax.set_title(f"{title} by body site")
-    ax.set_xlabel("Body site")
-    ax.set_ylabel(title)
-
-    sns.despine()
-    plt.setp(ax.get_xticklabels(), rotation=20, ha="right")
-
-    fig.tight_layout()
-    plt.show()
-```
-
----
-
-## Depth Sensitivity Check (Python)
-
-```{python richness-vs-depth}
-import numpy as np
-
-df = pd.read_csv("outputs/tables/alpha-diversity.csv")
-
-plt.figure(figsize=(8.5,5))
-sns.scatterplot(data=df, x="library_size", y="observed", alpha=0.7)
-
-coef = np.polyfit(df["library_size"], df["observed"], 1)
-x = np.linspace(df["library_size"].min(), df["library_size"].max(), 200)
-plt.plot(x, coef[0]*x + coef[1])
-
-plt.title("Observed richness vs sequencing depth")
-plt.xlabel("Library size")
-plt.ylabel("Observed richness")
-
-sns.despine()
-plt.tight_layout()
-plt.show()
-```
-
----
-
-## Interpretation
 
 :::cdi-message
-Observed richness is highly depth-sensitive.
+Alpha diversity values are not “good” or “bad” by themselves.
 
-Shannon and Simpson reduce some sensitivity but do not eliminate it.
-
-If richness increases strongly with depth, group comparisons may reflect sequencing effort rather than ecology.
+They only become meaningful when compared across groups with a clear question and a consistent preprocessing pipeline.
 :::
 
-### What these plots show
+## Alpha diversity by body site
 
-- Distribution of diversity within groups  
-- Variability across samples  
-- Dominance vs evenness patterns  
+We visualize metrics by body site as a descriptive summary.
 
-### What they do not show
+```{r pivot-alpha-long}
+alpha_long <- tidyr::pivot_longer(
+  alpha_df,
+  cols = c("observed", "shannon", "simpson", "pielou"),
+  names_to = "metric",
+  values_to = "value"
+)
 
-- Absolute abundance  
-- Statistical significance  
-- Causation  
-- Confounder adjustment  
+alpha_long$metric <- factor(
+  alpha_long$metric,
+  levels = c("observed", "shannon", "simpson", "pielou"),
+  labels = c("Observed richness", "Shannon", "Simpson", "Pielou evenness")
+)
+```
 
-Alpha diversity is descriptive unless formally tested.
+```{r plot-alpha-by-body-site, fig.width=11, fig.height=7}
+ggplot2::ggplot(alpha_long, ggplot2::aes(x = body_site, y = value)) +
+  ggplot2::geom_boxplot(
+    fill = "#e6f2f6",
+    color = "#0f172a",
+    linewidth = 0.35,
+    outlier.shape = NA
+  ) +
+  ggplot2::geom_jitter(
+    ggplot2::aes(color = body_site),
+    width = 0.18,
+    height = 0,
+    alpha = 0.55,
+    size = 1.8,
+    show.legend = FALSE
+  ) +
+  ggplot2::facet_wrap(~ metric, scales = "free_y", ncol = 2) +
+  ggplot2::labs(
+    title = "Alpha diversity by body site",
+    subtitle = "Descriptive distributions across within-sample diversity metrics",
+    x = "Body site",
+    y = NULL
+  ) +
+  ggplot2::scale_color_brewer(palette = "Dark2") +
+  ggplot2::theme_bw(base_size = 13) +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5, color = "#475569"),
+    panel.grid.minor = ggplot2::element_blank(),
+    axis.text.x = ggplot2::element_text(angle = 25, hjust = 1),
+    strip.background = ggplot2::element_rect(fill = "white", color = "white"),
+    strip.text = ggplot2::element_text(face = "bold")
+  )
+```
 
----
+:::cdi-message
+What to look for:
 
-<!-- :::next
-Next → [Ordination Plots](06-ordination-plots.qmd)
-::: -->
+- **Observed richness** is most sensitive to sequencing depth and rare taxa.
+- **Shannon** increases when samples have many taxa with balanced abundances.
+- **Simpson** is driven by dominance; it changes when a few taxa take over.
+- **Pielou** isolates evenness; it can drop when communities become uneven.
+
+If metrics disagree, that is a signal to interpret, not an error to hide.
+:::
+
+## Interpretation reminder
+
+This guide is descriptive. It shows what the data look like and how common summaries behave.
+
+To make inferential claims, you would typically add:
+
+- statistical testing under appropriate assumptions
+- covariate handling (confounding, repeated measures)
+- multivariate modeling for community-level change
+
+Those topics belong in the premium continuation.
+

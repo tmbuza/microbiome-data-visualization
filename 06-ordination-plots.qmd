@@ -24,9 +24,6 @@ This chapter focuses on:
 ## Load data
 
 ```{r load-phyloseq}
-library(phyloseq)
-library(vegan)
-
 ps <- readRDS("data/moving-pictures-ps.rds")
 ```
 
@@ -54,12 +51,34 @@ This is expected and should be reported.
 
 ```{r bray-curtis-distance}
 dist_bc <- phyloseq::distance(ps_rel, method = "bray")
-dist_bc
+
+# Compact distance overview (avoid printing the full dist object)
+n_samples <- phyloseq::nsamples(ps_rel)
+n_pairs <- length(dist_bc)
+
+dist_summary <- stats::quantile(
+  as.numeric(dist_bc),
+  probs = c(0, 0.25, 0.5, 0.75, 1),
+  names = TRUE
+)
+
+data.frame(
+  n_samples = n_samples,
+  n_pairs = n_pairs,
+  t(round(dist_summary, 4)),
+  row.names = NULL,
+  check.names = FALSE
+)
+
+# Small preview (first 6 samples)
+as.matrix(dist_bc)[1:6, 1:6]
 ```
 
 ---
 
 ## PCoA ordination
+
+We compute a PCoA (principal coordinates analysis) on the Bray–Curtis distance matrix.
 
 ```{r pcoa-ordination}
 ord <- phyloseq::ordinate(ps_rel, method = "PCoA", distance = dist_bc)
@@ -89,18 +108,24 @@ if (length(body_col) == 0) {
 
 ord_df$body_site <- ord_df[[body_col[1]]]
 
-# Store variance labels for plotting
-ord_df$pc1_label <- ifelse(is.na(var_pc1), "PC1", sprintf("PC1 (%.1f%%)", var_pc1))
-ord_df$pc2_label <- ifelse(is.na(var_pc2), "PC2", sprintf("PC2 (%.1f%%)", var_pc2))
+# Axis labels with variance (if available)
+pc1_label <- if (is.na(var_pc1)) "PC1" else sprintf("PC1 (%.1f%%)", var_pc1)
+pc2_label <- if (is.na(var_pc2)) "PC2" else sprintf("PC2 (%.1f%%)", var_pc2)
 
+# Export tables for reproducibility
 dir.create("outputs/tables", recursive = TRUE, showWarnings = FALSE)
-readr::write_csv(ord_df, "outputs/tables/ordination-pcoa.csv")
 
-# Save variance info (optional)
-var_df <- data.frame(PC1 = var_pc1, PC2 = var_pc2)
-readr::write_csv(var_df, "outputs/tables/ordination-variance.csv")
+readr::write_csv(
+  ord_df[, c("sample_id", "PC1", "PC2", "body_site")],
+  "outputs/tables/ordination-pcoa.csv"
+)
 
-head(ord_df[, c("sample_id","PC1","PC2","body_site")])
+readr::write_csv(
+  data.frame(PC1 = var_pc1, PC2 = var_pc2),
+  "outputs/tables/ordination-variance.csv"
+)
+
+head(ord_df[, c("sample_id", "PC1", "PC2", "body_site")])
 ```
 
 :::cdi-message
@@ -112,194 +137,67 @@ Axis labels are useful, but do not overinterpret them.
 
 ---
 
-## Ordination plot (Python)
+## Ordination plot
 
-This plot uses Python for a clean, modern visualization layer.
-It includes points, group centroids, and confidence ellipses.
+This plot shows samples in PCoA space, colored by body site.
 
-```{python plot-ordination-seaborn}
-import pandas as pd
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse
+- Points close together have more similar community composition (under Bray–Curtis).
+- Separation can reflect biology, but it can also reflect preprocessing choices or technical structure.
 
-df = pd.read_csv("outputs/tables/ordination-pcoa.csv").dropna(subset=["body_site"])
+```{r plot-ordination, fig.width=10, fig.height=6}
+plot_df <- ord_df
+plot_df$body_site <- as.factor(plot_df$body_site)
 
-# Palette customization
-palette_name = "Set1"   # Try: "Set1", "tab10", "colorblind", "viridis"
-groups = list(df["body_site"].astype(str).unique())
-palette = sns.color_palette(palette_name, n_colors=len(groups))
-color_map = dict(zip(groups, palette))
-
-sns.set_theme(style="whitegrid", context="notebook")
-
-def add_confidence_ellipse(ax, x, y, n_std=1.96, **kwargs):
-    x = np.asarray(x)
-    y = np.asarray(y)
-    if len(x) < 3:
-        return
-
-    cov = np.cov(x, y)
-    if np.any(~np.isfinite(cov)):
-        return
-
-    vals, vecs = np.linalg.eigh(cov)
-    order = vals.argsort()[::-1]
-    vals = vals[order]
-    vecs = vecs[:, order]
-
-    theta = np.degrees(np.arctan2(*vecs[:, 0][::-1]))
-
-    width, height = 2 * n_std * np.sqrt(vals)
-    ell = Ellipse(
-        xy=(np.mean(x), np.mean(y)),
-        width=width,
-        height=height,
-        angle=theta,
-        **kwargs
-    )
-    ax.add_patch(ell)
-
-# Axis labels with variance if present
-pc1_label = df["pc1_label"].iloc[0] if "pc1_label" in df.columns else "PC1"
-pc2_label = df["pc2_label"].iloc[0] if "pc2_label" in df.columns else "PC2"
-
-fig, ax = plt.subplots(figsize=(8.5, 6))
-
-# Points
-sns.scatterplot(
-    data=df,
-    x="PC1",
-    y="PC2",
-    hue="body_site",
-    palette=color_map,
-    s=65,
-    alpha=0.85,
-    edgecolor="black",
-    linewidth=0.35,
-    ax=ax
+# Centroids for each group (for visual guidance only)
+centroids <- dplyr::summarise(
+  dplyr::group_by(plot_df, body_site),
+  PC1 = mean(PC1, na.rm = TRUE),
+  PC2 = mean(PC2, na.rm = TRUE),
+  n = dplyr::n(),
+  .groups = "drop"
 )
 
-# Centroids and ellipses
-for g in groups:
-    sub = df[df["body_site"].astype(str) == g]
-    cx, cy = sub["PC1"].mean(), sub["PC2"].mean()
-
-    ax.scatter([cx], [cy], s=160, marker="X", edgecolor="black", linewidth=0.6, zorder=5)
-
-    add_confidence_ellipse(
-        ax,
-        sub["PC1"],
-        sub["PC2"],
-        n_std=1.96,
-        facecolor=color_map[g],
-        alpha=0.12,
-        edgecolor=color_map[g],
-        linewidth=1.2
-    )
-
-ax.set_title("PCoA (Bray–Curtis distance)", weight="bold")
-ax.set_xlabel(pc1_label)
-ax.set_ylabel(pc2_label)
-
-ax.axhline(0, linewidth=0.6, alpha=0.6)
-ax.axvline(0, linewidth=0.6, alpha=0.6)
-
-sns.despine(ax=ax)
-ax.legend(title="Body site", bbox_to_anchor=(1.02, 1), loc="upper left", frameon=False)
-
-fig.tight_layout()
-plt.show()
+ggplot2::ggplot(plot_df, ggplot2::aes(x = PC1, y = PC2, color = body_site)) +
+  ggplot2::geom_point(size = 3, alpha = 0.85) +
+  ggplot2::stat_ellipse(
+    ggplot2::aes(group = body_site),
+    type = "norm",
+    level = 0.95,
+    linewidth = 0.9,
+    alpha = 0.15,
+    show.legend = FALSE
+  ) +
+  ggplot2::geom_point(
+    data = centroids,
+    ggplot2::aes(x = PC1, y = PC2),
+    shape = 4,
+    stroke = 1.2,
+    size = 5,
+    show.legend = FALSE
+  ) +
+  ggplot2::labs(
+    title = "PCoA ordination (Bray–Curtis)",
+    subtitle = "Samples colored by body site. X marks show group centroids (descriptive).",
+    x = pc1_label,
+    y = pc2_label,
+    color = "Body site"
+  ) +
+  ggplot2::theme_bw(base_size = 13) +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5),
+    panel.grid.minor = ggplot2::element_blank(),
+    legend.position = "right"
+  )
 ```
 
 :::cdi-message
-Interpretation starts with distance.
+How to read this plot:
 
-Points close together represent samples with similar community composition under the chosen distance and preprocessing.
-Points far apart represent larger compositional differences.
+- Clear separation suggests that body site is a major driver of between-sample differences.
+- Overlap suggests either shared composition, within-group heterogeneity, or insufficient resolution at this preprocessing level.
+
+Do not treat visual separation as proof.
+
+In the premium continuation, we test whether metadata variables explain a significant fraction of variance using methods like PERMANOVA.
 :::
-
----
-
-## Reading the plot responsibly
-
-### What clustering can suggest
-
-- Distinct clusters by group can indicate systematic differences in composition.
-- Overlap can indicate weak separation or high within-group variability.
-- A single outlier can stretch the geometry and distort visual separation.
-
-### What ordination does not tell you
-
-- It does not identify which taxa drive separation.
-- It does not prove statistical significance.
-- It does not separate technical effects from biology.
-
-:::cdi-message
-A clean separation in an ordination plot is a hypothesis generator.
-
-It should lead to targeted follow-up, not a final conclusion.
-:::
-
----
-
-## Optional: PERMANOVA (group differences)
-
-PERMANOVA tests whether group centroids differ in multivariate space.
-
-```{r permanova}
-meta_df <- data.frame(phyloseq::sample_data(ps_rel))
-cols <- names(meta_df)
-body_col <- intersect(c("body-site", "body.site", "body_site"), cols)
-
-if (length(body_col) == 0) {
-  stop("Body site column not found for PERMANOVA.")
-}
-
-meta_df$body_site <- meta_df[[body_col[1]]]
-
-vegan::adonis2(dist_bc ~ body_site, data = meta_df)
-```
-
-:::cdi-message
-A significant PERMANOVA result means group centroids differ.
-
-It can also be driven by unequal within-group dispersion.
-This is why dispersion should be checked.
-:::
-
----
-
-## Optional: dispersion check (beta dispersion)
-
-```{r dispersion-check}
-meta_df <- data.frame(phyloseq::sample_data(ps_rel))
-cols <- names(meta_df)
-body_col <- intersect(c("body-site", "body.site", "body_site"), cols)
-
-meta_df$body_site <- meta_df[[body_col[1]]]
-
-bd <- vegan::betadisper(dist_bc, group = meta_df$body_site)
-bd
-vegan::permutest(bd)
-```
-
-:::cdi-message
-If dispersion differs strongly across groups, PERMANOVA can appear significant even without true centroid separation.
-
-Interpretation should report both results.
-:::
-
----
-
-## Takeaway
-
-- Ordination summarizes dissimilarity, not biology.
-- The distance metric and preprocessing choices define the geometry.
-- Visual separation is descriptive. Statistical tests support interpretation.
-- Always check dispersion when using PERMANOVA.
-
-<!-- :::next
-Next → [Heatmaps and Patterns](07-heatmaps-and-patterns.qmd)
-::: -->

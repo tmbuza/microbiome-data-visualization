@@ -22,10 +22,27 @@ This chapter focuses on:
 
 ## Load data
 
-```{r load-phyloseq}
-library(phyloseq)
+```{r load-phyloseq-object}
+ps <- base::readRDS("data/moving-pictures-ps.rds")
+```
 
-ps <- readRDS("data/moving-pictures-ps.rds")
+---
+
+## A CDI plotting theme for this chapter
+
+```{r cdi-theme}
+cdi_teal   <- "#036281"
+cdi_yellow <- "#f7c546"
+cdi_muted  <- "#475569"
+
+cdi_plot_theme <- function(base_size = 13) {
+  ggplot2::theme_bw(base_size = base_size) +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(face = "bold", hjust = 0.5),
+      plot.subtitle = ggplot2::element_text(color = cdi_muted, hjust = 0.5),
+      panel.grid.minor = ggplot2::element_blank()
+    )
+}
 ```
 
 ---
@@ -34,15 +51,20 @@ ps <- readRDS("data/moving-pictures-ps.rds")
 
 Heatmaps work best when the matrix:
 
-- has been transformed (raw counts are dominated by depth)
+- has been transformed (raw counts are dominated by sequencing depth)
 - has a limited number of taxa (readable signal)
 - is aligned to metadata (so patterns can be interpreted)
 
-We will create a genus-level heatmap using the top taxa by mean relative abundance.
+In this guide we will:
+
+1. Convert counts to **relative abundance**
+2. Aggregate to the **Genus** level
+3. Select the top genera by **mean relative abundance**
+4. Visualize patterns across **body site** as a compact heatmap
 
 ---
 
-## Transform to relative abundance and aggregate to genus
+## Transform and aggregate to genus
 
 ```{r genus-aggregation}
 ps_rel <- phyloseq::transform_sample_counts(ps, function(x) x / sum(x))
@@ -64,10 +86,10 @@ Heatmap patterns should be interpreted at the chosen resolution.
 ## Select top genera
 
 ```{r select-top-genera}
-genus_mean <- phyloseq::taxa_sums(ps_genus) / phyloseq::nsamples(ps_genus)
-
 top_n <- 30
-top_genera <- names(sort(genus_mean, decreasing = TRUE))[1:top_n]
+
+genus_mean <- phyloseq::taxa_sums(ps_genus) / phyloseq::nsamples(ps_genus)
+top_genera <- names(sort(genus_mean, decreasing = TRUE))[seq_len(top_n)]
 
 ps_top <- phyloseq::prune_taxa(top_genera, ps_genus)
 phyloseq::ntaxa(ps_top)
@@ -75,169 +97,103 @@ phyloseq::ntaxa(ps_top)
 
 ---
 
-## Build the heatmap matrix (R → Python)
+## Build a compact matrix for visualization
 
-We will export a clean matrix for Python plotting:
+We will compute mean relative abundance per body site and genus.
+This reduces clutter while keeping patterns interpretable.
 
-- rows: taxa (Genus)
-- columns: samples
-- values: centered log ratio style is premium-level; for free we use log1p relative abundance
+```{r build-heatmap-table}
+df_comp <- phyloseq::psmelt(ps_top)
 
-We also export metadata to annotate columns.
-
-```{r export-heatmap-data}
-# Extract matrix
-mat <- methods::as(phyloseq::otu_table(ps_top), "matrix")
-if (!phyloseq::taxa_are_rows(ps_top)) {
-  mat <- t(mat)
-}
-
-# Log transform for heatmap stability (free-track choice)
-mat_log <- log1p(mat)
-
-# Taxon labels
-tax <- as.data.frame(phyloseq::tax_table(ps_top))
-tax$taxon_id <- rownames(tax)
-
-# Prefer Genus as label, fallback to taxon id if needed
-label <- tax$Genus
-label[is.na(label) | label == ""] <- tax$taxon_id[is.na(label) | label == ""]
-
-# Apply labels
-rownames(mat_log) <- make.unique(as.character(label))
-
-# Export matrix
-dir.create("outputs/tables", recursive = TRUE, showWarnings = FALSE)
-mat_log_df <- tibble::as_tibble(mat_log, rownames = "taxon")
-readr::write_csv(mat_log_df, "outputs/tables/heatmap-matrix.csv")
-
-# Export metadata (for column annotation)
-meta <- data.frame(phyloseq::sample_data(ps_top))
-meta$sample_id <- rownames(meta)
-
-# Robust body site detection
-cols <- names(meta)
+# Standardize body site column name (handles `body-site`, `body.site`, `body_site`)
+cols <- names(df_comp)
 body_col <- intersect(c("body-site", "body.site", "body_site"), cols)
 
 if (length(body_col) == 0) {
-  stop("Body site column not found in metadata. Available columns: ", paste(cols, collapse = ", "))
+  stop("Body site column not found. Available columns: ", paste(cols, collapse = ", "))
 }
 
-meta$body_site <- meta[[body_col[1]]]
+df_comp$body_site <- df_comp[[body_col[1]]]
 
-meta_out <- meta[, c("sample_id", "body_site")]
-readr::write_csv(meta_out, "outputs/tables/heatmap-metadata.csv")
+df_mean <- df_comp |>
+  dplyr::filter(!is.na(body_site)) |>
+  dplyr::group_by(body_site, Genus) |>
+  dplyr::summarise(mean_abundance = mean(Abundance, na.rm = TRUE), .groups = "drop")
 
-# Quick sanity check
-dim(mat_log)
+# Order genera by global mean abundance for more stable reading
+genus_order <- df_mean |>
+  dplyr::group_by(Genus) |>
+  dplyr::summarise(global_mean = mean(mean_abundance, na.rm = TRUE), .groups = "drop") |>
+  dplyr::arrange(dplyr::desc(global_mean)) |>
+  dplyr::pull(Genus)
+
+df_mean$Genus <- factor(df_mean$Genus, levels = genus_order)
+
+# Order body sites by total mean abundance
+body_order <- df_mean |>
+  dplyr::group_by(body_site) |>
+  dplyr::summarise(total = sum(mean_abundance, na.rm = TRUE), .groups = "drop") |>
+  dplyr::arrange(dplyr::desc(total)) |>
+  dplyr::pull(body_site)
+
+df_mean$body_site <- factor(df_mean$body_site, levels = body_order)
+
+# Export for reproducibility
+base::dir.create("outputs/tables", recursive = TRUE, showWarnings = FALSE)
+readr::write_csv(df_mean, "outputs/tables/heatmap-mean-body-site-genus.csv")
+```
+
+---
+
+## Heatmap of mean genus composition by body site
+
+We use a **viridis** scale (option `"magma"`) because it provides strong contrast and is broadly readable.
+
+```{r plot-heatmap-mean, fig.width=11, fig.height=4.8}
+ggplot2::ggplot(df_mean, ggplot2::aes(x = Genus, y = body_site, fill = mean_abundance)) +
+  ggplot2::geom_tile(color = "white", linewidth = 0.25) +
+  ggplot2::scale_fill_viridis_c(option = "magma", name = "Mean rel. abundance") +
+  ggplot2::labs(
+    title = "Mean genus composition heatmap",
+    subtitle = "Aggregated by body site (relative abundance)"
+  ) +
+  ggplot2::theme_bw(base_size = 12) +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(color = cdi_muted, hjust = 0.5),
+    axis.title = ggplot2::element_blank(),
+    axis.text.x = ggplot2::element_text(angle = 90, vjust = 0.5, hjust = 1, size = 9),
+    axis.text.y = ggplot2::element_text(size = 10),
+    panel.grid = ggplot2::element_blank(),
+    legend.title = ggplot2::element_text(face = "bold"),
+    legend.position = "right"
+  )
 ```
 
 :::cdi-message
-The transformation you choose defines what “pattern” means.
+How to read this heatmap:
 
-Log1p reduces dominance effects, making mid-abundance taxa visible.
-Premium extensions can explore CLR and compositional heatmaps.
+- Compare patterns across **rows** (body sites)
+- Compare which genera dominate within a body site
+- Look for genera that appear consistently across sites versus those that are site-specific
+
+Remember: these are **relative abundances** averaged across samples.
 :::
 
 ---
 
-## Heatmap (Python, seaborn)
+## Avoid common heatmap traps
 
-This is a modern heatmap with hierarchical clustering.
+Heatmaps can be misleading when:
 
-- Rows cluster by taxa similarity
-- Columns cluster by sample similarity
-- Body site is used as a column annotation
-
-```{python plot-heatmap-clustermap}
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-mat = pd.read_csv("outputs/tables/heatmap-matrix.csv", index_col=0)
-meta = pd.read_csv("outputs/tables/heatmap-metadata.csv")
-
-# Align metadata order to matrix columns
-meta = meta.set_index("sample_id").reindex(mat.columns)
-
-# Palette customization for annotations
-palette_name = "Set1"   # Try: "Set1", "tab10", "colorblind"
-sites = meta["body_site"].astype(str).unique().tolist()
-site_colors = dict(zip(sites, sns.color_palette(palette_name, n_colors=len(sites))))
-col_colors = meta["body_site"].astype(str).map(site_colors)
-
-sns.set_theme(style="white")
-
-g = sns.clustermap(
-    mat,
-    method="average",
-    metric="euclidean",
-    col_colors=col_colors,
-    cmap="viridis",
-    figsize=(10, 9),
-    xticklabels=False,
-    yticklabels=True
-)
-
-# Legend for body site annotation
-for site, c in site_colors.items():
-    g.ax_col_dendrogram.bar(0, 0, color=c, label=site, linewidth=0)
-
-g.ax_col_dendrogram.legend(
-    title="Body site",
-    loc="center",
-    ncol=1,
-    bbox_to_anchor=(1.12, 0.5),
-    frameon=False
-)
-
-plt.show()
-```
+- taxa are too numerous (pattern becomes noise)
+- transformation choices are not stated
+- clustering is overinterpreted as causation
+- groups are averaged without acknowledging within-group variation
 
 :::cdi-message
-Clustering is a pattern-finding tool.
+A heatmap is a summary view.
 
-Clusters should be treated as hypotheses until validated with targeted analysis.
+Treat it as a pattern-finding tool, then follow up with targeted plots and formal testing.
 :::
 
----
-
-## Reading heatmaps responsibly
-
-### What patterns can suggest
-
-- Taxa that co-occur across samples
-- Group structure (samples that cluster together)
-- Dominance patterns (taxa that stand out repeatedly)
-
-### Common misinterpretations
-
-- Clustering does not imply causation
-- Bright color does not automatically imply biological importance
-- Heatmaps are highly sensitive to:
-  - transformation
-  - filtering and top-N selection
-  - distance metric and linkage method
-
-:::cdi-message
-Heatmaps are not "results" by themselves.
-
-They are a compact way to inspect structure and generate questions for follow-up.
-:::
-
----
-
-## Premium extension idea (kept for later)
-
-In premium, you can add:
-
-- CLR transformation and compositional heatmaps
-- per-group mean heatmaps (reduces sample noise)
-- differential abundance overlays (results + visualization)
-- stability checks: does clustering persist under alternative transformations?
-
----
-
-<!-- :::next
-Next → [Summary and Next Steps](08-summary-and-next-steps.qmd)
-::: -->

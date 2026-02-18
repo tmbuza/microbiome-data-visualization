@@ -1,9 +1,12 @@
----
-title: "Composition Visualization"
-engine: knitr
----
-
 # Composition Visualization
+```{=html}
+<style>
+/* Chapter 07: center figure captions */
+.quarto-figure figcaption,
+figure figcaption{ text-align:center; }
+</style>
+```
+
 
 Composition plots are often the first figures shown in microbiome studies.
 
@@ -81,7 +84,7 @@ phyloseq::ntaxa(ps_top)
 
 ## Prepare composition table for plotting
 
-We will compute mean relative abundance by body site, then show two modern Python visualizations:
+We compute mean relative abundance by body site, then visualize it using two R figures:
 a stacked bar chart and a heatmap.
 
 ```{r export-composition-table}
@@ -130,46 +133,38 @@ For overview plots, averaging within a group can reveal stable patterns that are
 This is descriptive summarization, not inference.
 :::
 
-## Composition by body site (Python stacked bar)
+## Composition by body site
 
-```{python plot-composition-stacked}
-import pandas as pd
-import matplotlib.pyplot as plt
+```{r plot-composition-stacked-body-site}
+# Order body sites by total mean abundance across the plotted genera
+body_order <- df_mean |>
+  dplyr::group_by(body_site) |>
+  dplyr::summarise(total = sum(Abundance, na.rm = TRUE), .groups = "drop") |>
+  dplyr::arrange(dplyr::desc(total)) |>
+  dplyr::pull(body_site)
 
-df = pd.read_csv("outputs/tables/mean-composition-body-site-genus.csv")
+df_mean$body_site <- factor(df_mean$body_site, levels = body_order)
 
-# Pivot to body-site x genus
-wide = df.pivot(index="body_site", columns="Genus", values="Abundance").fillna(0)
-
-# Ensure consistent order (largest total first)
-wide = wide.loc[wide.sum(axis=1).sort_values(ascending=False).index]
-
-fig, ax = plt.subplots(figsize=(9, 5))
-
-bottom = None
-for col in wide.columns:
-    vals = wide[col].to_numpy()
-    if bottom is None:
-        ax.bar(wide.index, vals, label=col)
-        bottom = vals
-    else:
-        ax.bar(wide.index, vals, bottom=bottom, label=col)
-        bottom = bottom + vals
-
-ax.set_title("Mean genus composition by body site")
-ax.set_xlabel("Body site")
-ax.set_ylabel("Mean relative abundance")
-
-ax.grid(True, axis="y", alpha=0.25)
-ax.spines["top"].set_visible(False)
-ax.spines["right"].set_visible(False)
-
-# Legend outside for readability
-ax.legend(title="Genus", bbox_to_anchor=(1.02, 1), loc="upper left", frameon=False)
-
-fig.tight_layout()
-plt.show()
+ggplot2::ggplot(df_mean, ggplot2::aes(x = body_site, y = Abundance, fill = Genus)) +
+  ggplot2::geom_col(width = 0.75, color = "white", linewidth = 0.25) +
+  ggplot2::labs(
+    title = "Mean genus composition by body site",
+    subtitle = "Top genera only; proportions are relative abundance",
+    x = "Body site",
+    y = "Mean relative abundance"
+  ) +
+  ggplot2::theme_minimal(base_size = 14) +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5, color = "#475569"),
+    axis.text.x = ggplot2::element_text(angle = 90, hjust = 1, vjust = 0.5, size = 9),
+    panel.grid.minor = ggplot2::element_blank(),
+    legend.title = ggplot2::element_text(face = "bold"),
+    legend.position = "right"
+  ) +
+  ggplot2::scale_fill_brewer(palette = "Set3")
 ```
+
 
 :::cdi-message
 These bars show average proportions, not absolute microbial load.
@@ -177,38 +172,42 @@ These bars show average proportions, not absolute microbial load.
 A taxon can appear to “increase” in relative abundance even if its absolute abundance is unchanged.
 :::
 
-## Composition heatmap (Python)
+## Composition heatmap
 
-```{python plot-composition-heatmap}
-import pandas as pd
-import matplotlib.pyplot as plt
+```{r plot-composition-heatmap}
+# Order genera by overall mean abundance (top to bottom in legend)
+genus_order <- df_mean |>
+  dplyr::group_by(Genus) |>
+  dplyr::summarise(total = sum(Abundance, na.rm = TRUE), .groups = "drop") |>
+  dplyr::arrange(dplyr::desc(total)) |>
+  dplyr::pull(Genus)
 
-df = pd.read_csv("outputs/tables/mean-composition-body-site-genus.csv")
-wide = df.pivot(index="body_site", columns="Genus", values="Abundance").fillna(0)
+df_heat <- df_mean
+df_heat$Genus <- factor(df_heat$Genus, levels = genus_order)
+df_heat$body_site <- factor(df_heat$body_site, levels = levels(df_mean$body_site))
 
-# Order rows and columns by overall abundance
-wide = wide.loc[wide.sum(axis=1).sort_values(ascending=False).index]
-wide = wide[wide.sum(axis=0).sort_values(ascending=False).index]
-
-fig, ax = plt.subplots(figsize=(9, 5))
-im = ax.imshow(wide.values, aspect="auto")
-
-ax.set_title("Heatmap of mean genus composition")
-ax.set_xlabel("Genus")
-ax.set_ylabel("Body site")
-
-ax.set_yticks(range(len(wide.index)))
-ax.set_yticklabels(list(wide.index))
-
-ax.set_xticks(range(len(wide.columns)))
-ax.set_xticklabels(list(wide.columns), rotation=45, ha="right")
-
-cbar = fig.colorbar(im, ax=ax)
-cbar.set_label("Mean relative abundance")
-
-fig.tight_layout()
-plt.show()
+ggplot2::ggplot(df_heat, ggplot2::aes(x = Genus, y = body_site, fill = Abundance)) +
+  ggplot2::geom_tile(color = "white", linewidth = 0.25) +
+  ggplot2::labs(
+    title = "Mean composition heatmap",
+    subtitle = "Mean relative abundance of top genera by body site",
+    x = NULL,
+    y = "Body site",
+    fill = NULL
+  ) +
+  ggplot2::scale_fill_viridis_c(
+    option = "magma",
+    name = "Mean rel.\nabund."
+  ) +
+  ggplot2::theme_minimal(base_size = 14) +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5, color = "#475569"),
+    axis.text.x = ggplot2::element_text(angle = 90, hjust = 1, vjust = 0.5, size = 9),
+    panel.grid = ggplot2::element_blank()
+  )
 ```
+
 
 :::cdi-message
 Heatmaps emphasize patterns of dominance and absence across groups.
