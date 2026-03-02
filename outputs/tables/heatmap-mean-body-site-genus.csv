@@ -1,0 +1,121 @@
+body_site,Genus,mean_abundance
+gut,Acinetobacter,0
+gut,Akkermansia,0.014339602065153964
+gut,Alistipes,0.01578016980805785
+gut,Anaerococcus,0
+gut,Bacteroides,0.562393373144834
+gut,Blautia,0.013027254712599648
+gut,Campylobacter,0
+gut,Corynebacterium,1.221555214295686e-4
+gut,Faecalibacterium,0.07704459168740363
+gut,Finegoldia,1.9195867653217926e-4
+gut,Fusobacterium,5.513920419966541e-4
+gut,Haemophilus,1.6553507319412605e-4
+gut,Lachnospira,0.05223775056809206
+gut,Lactococcus,0
+gut,Neisseria,8.033419023136246e-5
+gut,Oribacterium,0.0022842520153021307
+gut,Oscillospira,0.023099561121291606
+gut,Parabacteroides,0.018541671255858566
+gut,Pedobacter,0
+gut,Peptoniphilus,1.3960631020522126e-4
+gut,Phascolarctobacterium,0.031050690390858133
+gut,Prevotella,0.0022800420039140014
+gut,Pseudomonas,0
+gut,Psychrobacter,0
+gut,Roseburia,0.032076402599681045
+gut,Rothia,0
+gut,Streptobacillus,0
+gut,Streptococcus,8.281630003379676e-4
+gut,Veillonella,1.0733562315996073e-4
+gut,[Prevotella],0
+left palm,Acinetobacter,0.03244533319971403
+left palm,Akkermansia,0
+left palm,Alistipes,0
+left palm,Anaerococcus,0.02357707269069002
+left palm,Bacteroides,0.00749992583484423
+left palm,Blautia,0.001603672482175389
+left palm,Campylobacter,0.004080672833478188
+left palm,Corynebacterium,0.12732857930495467
+left palm,Faecalibacterium,0.0031052330084233746
+left palm,Finegoldia,0.011933980808158908
+left palm,Fusobacterium,0.042379509950710215
+left palm,Haemophilus,0.04719693875877672
+left palm,Lachnospira,1.7618040873854825e-4
+left palm,Lactococcus,0.011966621483470396
+left palm,Neisseria,0.053402341642363946
+left palm,Oribacterium,0.0022402949605422793
+left palm,Oscillospira,3.987134707934822e-4
+left palm,Parabacteroides,0
+left palm,Pedobacter,0.010184116467225703
+left palm,Peptoniphilus,0.017196397299336235
+left palm,Phascolarctobacterium,5.984788347414402e-4
+left palm,Prevotella,0.02569151692259302
+left palm,Pseudomonas,0.08702226348141452
+left palm,Psychrobacter,0.00568322296848045
+left palm,Roseburia,0
+left palm,Rothia,0.010365283363372578
+left palm,Streptobacillus,0.0109918583521633
+left palm,Streptococcus,0.1298888892905641
+left palm,Veillonella,0.015917132676647565
+left palm,[Prevotella],0.011089710474537785
+right palm,Acinetobacter,0.032057945812709404
+right palm,Akkermansia,0.0028490028490028483
+right palm,Alistipes,0.002757761764967529
+right palm,Anaerococcus,0.023283829224451793
+right palm,Bacteroides,0.1497196754376935
+right palm,Blautia,0.004012965755910099
+right palm,Campylobacter,7.668761569222913e-4
+right palm,Corynebacterium,0.12025426074377642
+right palm,Faecalibacterium,0.020931845785820902
+right palm,Finegoldia,0.010214889675380704
+right palm,Fusobacterium,0.014320361678547357
+right palm,Haemophilus,0.023243055844261944
+right palm,Lachnospira,0.0023535240926545273
+right palm,Lactococcus,0.008180442470115295
+right palm,Neisseria,0.021631957986132766
+right palm,Oribacterium,0.00233050889682101
+right palm,Oscillospira,0.005740750162374418
+right palm,Parabacteroides,0.001868161195623165
+right palm,Pedobacter,0.005169635030626654
+right palm,Peptoniphilus,0.01343590877733677
+right palm,Phascolarctobacterium,0.011481289333406109
+right palm,Prevotella,0.009003628385839171
+right palm,Pseudomonas,0.06607239320775359
+right palm,Psychrobacter,0.009331631422482283
+right palm,Roseburia,0.004368067723099574
+right palm,Rothia,0.005759915451061668
+right palm,Streptobacillus,0.008496178724760006
+right palm,Streptococcus,0.08960495242837344
+right palm,Veillonella,0.007671664214890294
+right palm,[Prevotella],0.012466754479734412
+tongue,Acinetobacter,0
+tongue,Akkermansia,0
+tongue,Alistipes,0
+tongue,Anaerococcus,0
+tongue,Bacteroides,0.002303964911098863
+tongue,Blautia,0
+tongue,Campylobacter,0.008883147200219009
+tongue,Corynebacterium,1.5782828282828284e-4
+tongue,Faecalibacterium,0
+tongue,Finegoldia,0
+tongue,Fusobacterium,0.09785299492066139
+tongue,Haemophilus,0.1886712350361618
+tongue,Lachnospira,0
+tongue,Lactococcus,0
+tongue,Neisseria,0.2213373790229062
+tongue,Oribacterium,0.009042945070479388
+tongue,Oscillospira,0
+tongue,Parabacteroides,0
+tongue,Pedobacter,0
+tongue,Peptoniphilus,0
+tongue,Phascolarctobacterium,0
+tongue,Prevotella,0.13922883330917185
+tongue,Pseudomonas,0
+tongue,Psychrobacter,0
+tongue,Roseburia,0
+tongue,Rothia,0.034092803692032145
+tongue,Streptobacillus,0
+tongue,Streptococcus,0.1435146215297785
+tongue,Veillonella,0.06797915405137284
+tongue,[Prevotella],0.013469965959791417

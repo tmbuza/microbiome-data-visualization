@@ -1,0 +1,41 @@
+body_site,Genus,Abundance
+gut,Bacteroides,0.562393373144834
+left palm,Bacteroides,0.00749992583484423
+right palm,Bacteroides,0.1497196754376935
+tongue,Bacteroides,0.002303964911098863
+gut,Corynebacterium,1.221555214295686e-4
+left palm,Corynebacterium,0.12732857930495467
+right palm,Corynebacterium,0.12025426074377642
+tongue,Corynebacterium,1.5782828282828284e-4
+gut,Faecalibacterium,0.07704459168740363
+left palm,Faecalibacterium,0.0031052330084233746
+right palm,Faecalibacterium,0.020931845785820902
+tongue,Faecalibacterium,0
+gut,Fusobacterium,5.513920419966541e-4
+left palm,Fusobacterium,0.042379509950710215
+right palm,Fusobacterium,0.014320361678547357
+tongue,Fusobacterium,0.09785299492066139
+gut,Haemophilus,1.6553507319412605e-4
+left palm,Haemophilus,0.04719693875877672
+right palm,Haemophilus,0.023243055844261944
+tongue,Haemophilus,0.1886712350361618
+gut,Neisseria,8.033419023136246e-5
+left palm,Neisseria,0.053402341642363946
+right palm,Neisseria,0.021631957986132766
+tongue,Neisseria,0.2213373790229062
+gut,Prevotella,0.0022800420039140014
+left palm,Prevotella,0.02569151692259302
+right palm,Prevotella,0.009003628385839171
+tongue,Prevotella,0.13922883330917185
+gut,Pseudomonas,0
+left palm,Pseudomonas,0.08702226348141452
+right palm,Pseudomonas,0.06607239320775359
+tongue,Pseudomonas,0
+gut,Streptococcus,8.281630003379676e-4
+left palm,Streptococcus,0.1298888892905641
+right palm,Streptococcus,0.08960495242837344
+tongue,Streptococcus,0.1435146215297785
+gut,Veillonella,1.0733562315996073e-4
+left palm,Veillonella,0.015917132676647565
+right palm,Veillonella,0.007671664214890294
+tongue,Veillonella,0.06797915405137284
