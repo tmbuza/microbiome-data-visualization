@@ -42,6 +42,25 @@ renv/library/
 renv/staging/
 renv/python/
 
+
+# ========================================
+# Python
+# ========================================
+
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.ipynb_checkpoints/
+
+# ========================================
+# Jupyter
+# ========================================
+
+*.ipynb_checkpoints
+
 # Keep renv.lock if ever used
 # (do NOT ignore renv.lock)
 
